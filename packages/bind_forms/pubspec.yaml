@@ -11,8 +11,11 @@ dependencies:
   flutter:
     sdk: flutter
   bind_forms_core: ^0.0.1
+  intl: ">=0.18.1 <1.0.0"
 
 dev_dependencies:
   flutter_test:
     sdk: flutter
   flutter_lints: ^6.0.0
+  # Only for tests that pump real Material widgets (TextField, Checkbox).
+  material_ui: ^1.7.0
