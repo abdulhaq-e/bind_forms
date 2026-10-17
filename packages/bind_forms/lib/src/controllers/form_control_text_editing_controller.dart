@@ -4,7 +4,8 @@
 
 import 'package:bind_forms/bind_forms.dart';
 import 'package:flutter/widgets.dart';
-import 'package:material_ui/material_ui.dart' show TimeOfDay;
+
+import 'text_control_sync.dart';
 
 /// A [TextEditingController] that stays in sync with a [FormControl].
 ///
@@ -52,15 +53,7 @@ class FormControlTextEditingController<T> extends TextEditingController
   @override
   final ShowErrorsFunction<T>? showErrors;
 
-  final ControlValueAccessor<T, String> _valueAccessor;
-  bool _updatingFromControl = false;
-  bool _updatingFromView = false;
-  bool _textSetFromControl = false;
-
-  /// The text last synced with the control, in either direction. Listeners
-  /// also fire for selection changes and for [notifyListeners] calls made
-  /// for status changes, so only a different text is a user edit.
-  late String _syncedText;
+  late final TextControlSync<T> _sync;
 
   /// Creates a controller bound to [control].
   ///
@@ -77,77 +70,25 @@ class FormControlTextEditingController<T> extends TextEditingController
     this.validationMessages,
     this.showErrors,
     FocusNode? focusNode,
-  }) : _valueAccessor = valueAccessor ?? _defaultValueAccessorFor<T>(control) {
+  }) {
     useFocusNode(focusNode);
-    text = _syncedText = _valueAccessor.modelToViewValue(control.value) ?? '';
-    // Registered before [_onControlChanged], so that on a value change from
-    // the control the text is already updated when [_onControlChanged] runs.
-    _valueAccessor.registerControl(control, onChange: _onControlValueChanged);
-    control.addListener(_onControlChanged);
-    addListener(_onTextChanged);
-  }
-
-  void _onTextChanged() {
-    if (_updatingFromControl || text == _syncedText) return;
-    _syncedText = text;
-    _updatingFromView = true;
-    try {
-      _valueAccessor.updateModel(text);
-    } finally {
-      _updatingFromView = false;
-    }
-  }
-
-  void _onControlValueChanged(String? viewValue) {
-    final effectiveValue = viewValue ?? '';
-    final newValue = value.copyWith(
-      text: effectiveValue,
-      selection: TextSelection.collapsed(offset: effectiveValue.length),
-      composing: TextRange.empty,
+    _sync = TextControlSync(
+      control: control,
+      textController: this,
+      valueAccessor: valueAccessor,
+      onControlChanged: _onControlChanged,
     );
-    if (newValue == value) return;
-
-    _updatingFromControl = true;
-    _textSetFromControl = true;
-    _syncedText = effectiveValue;
-    value = newValue;
-    _updatingFromControl = false;
   }
 
-  void _onControlChanged(ControlChanges changes) {
-    // Listeners were already notified by the text change: either the edit
-    // that caused this control change, or the text update that followed it.
-    if (_updatingFromView || _textSetFromControl) {
-      _textSetFromControl = false;
-      return;
-    }
-
-    if (changes.status || changes.touched) {
+  void _onControlChanged(ControlChanges changes, {required bool textNotified}) {
+    if (!textNotified && (changes.status || changes.touched)) {
       notifyListeners();
     }
   }
 
-  static ControlValueAccessor<K, String> _defaultValueAccessorFor<K>(
-    FormControl<K> control,
-  ) {
-    if (control is FormControl<int>) {
-      return IntValueAccessor() as ControlValueAccessor<K, String>;
-    } else if (control is FormControl<double>) {
-      return DoubleValueAccessor() as ControlValueAccessor<K, String>;
-    } else if (control is FormControl<DateTime>) {
-      return DateTimeValueAccessor() as ControlValueAccessor<K, String>;
-    } else if (control is FormControl<TimeOfDay>) {
-      return TimeOfDayValueAccessor() as ControlValueAccessor<K, String>;
-    }
-
-    return DefaultValueAccessor<K, String>();
-  }
-
   @override
   void dispose() {
-    removeListener(_onTextChanged);
-    control.removeListener(_onControlChanged);
-    _valueAccessor.dispose();
+    _sync.dispose();
     disposeFocusController();
     super.dispose();
   }
