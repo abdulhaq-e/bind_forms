@@ -11,7 +11,7 @@ void main() {
       'oneOf': {
         'requiredOneOf': required,
         'actual': actual,
-        if (caseSensitive != null) 'caseSensitive': caseSensitive,
+        'caseSensitive': ?caseSensitive,
       },
     };
 

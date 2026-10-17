@@ -1,6 +1,8 @@
 name: bind_forms_core
 description: Pure Dart form model (controls, groups, arrays, validators) for bind_forms. No Flutter dependency.
 version: 0.0.1
+repository: https://github.com/abdulhaq-e/bind_forms/tree/main/packages/bind_forms_core
+issue_tracker: https://github.com/abdulhaq-e/bind_forms/issues
 resolution: workspace
 
 environment:

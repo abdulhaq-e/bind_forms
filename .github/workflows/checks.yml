@@ -1,0 +1,62 @@
+# Shared by pr.yml and main.yml.
+name: Checks
+
+on:
+  workflow_call:
+
+permissions:
+  contents: read
+
+jobs:
+  analyze:
+    name: Format and analyze
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: ./.github/actions/setup
+
+      - name: Check formatting
+        run: dart format --output=none --set-exit-if-changed packages
+
+      - name: Analyze
+        run: dart analyze --fatal-infos
+
+  test:
+    name: Test ${{ matrix.package }}
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - package: bind_forms_core
+            command: dart test
+          - package: bind_forms_signals
+            command: dart test
+          - package: bind_forms
+            command: flutter test
+          - package: bind_forms/example
+            command: flutter test
+    steps:
+      - uses: actions/checkout@v7
+      - uses: ./.github/actions/setup
+
+      - name: Test
+        working-directory: packages/${{ matrix.package }}
+        run: ${{ matrix.command }}
+
+  publish-dry-run:
+    name: Publish dry run ${{ matrix.package }}
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        package: [bind_forms_core, bind_forms_signals, bind_forms]
+    steps:
+      - uses: actions/checkout@v7
+      - uses: ./.github/actions/setup
+
+      # Fails on any validation warning, so a release can't be blocked by
+      # something that would have been caught here.
+      - name: Validate package
+        working-directory: packages/${{ matrix.package }}
+        run: flutter pub publish --dry-run

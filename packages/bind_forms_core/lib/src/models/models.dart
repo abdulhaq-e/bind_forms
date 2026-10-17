@@ -161,10 +161,9 @@ abstract class AbstractControl<T> {
     /// future major version.
     int asyncValidatorsDebounceTime = 250,
     bool disabled = false,
-    bool touched = false,
+    this._touched = false,
   }) : assert(asyncValidatorsDebounceTime >= 0),
        _asyncValidatorsDebounceTime = asyncValidatorsDebounceTime,
-       _touched = touched,
        _initialDisabled = disabled,
        _status = disabled ? ControlStatus.disabled : ControlStatus.valid {
     setValidators(validators);

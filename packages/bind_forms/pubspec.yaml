@@ -1,6 +1,8 @@
 name: bind_forms
 description: Bind Flutter widgets to bind_forms_core controls without wrapping them.
 version: 0.0.1
+repository: https://github.com/abdulhaq-e/bind_forms/tree/main/packages/bind_forms
+issue_tracker: https://github.com/abdulhaq-e/bind_forms/issues
 resolution: workspace
 
 environment:
