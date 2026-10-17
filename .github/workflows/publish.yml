@@ -1,42 +1,62 @@
-# Publishes a package to pub.dev when its release tag is pushed:
+# Releases one package: publish to pub.dev, then tag and create the GitHub
+# Release. The tag is a record of what shipped, not a trigger for shipping
+# it, so a failed publish never leaves a tag behind.
 #
-#   bind_forms_core-v0.1.0   bind_forms-v0.1.0   bind_forms_signals-v0.1.0
+# Run it from the Actions tab on main, once the version bump is merged.
 #
-# Uses pub.dev automated publishing (GitHub OIDC), so there are no secrets.
-# Each package must enable it on pub.dev (Admin > Automated publishing)
-# with this repository, tag pattern `<package>-v{{version}}`, and, if
-# required there, the `pub.dev` environment used below.
+# Authentication: pub.dev's GitHub publishing only accepts runs triggered by
+# a tag push, which would make the tag come first. Instead this publishes
+# with a Google Cloud service account, impersonated through Workload
+# Identity Federation: no stored secrets. See "Releasing" in the README for
+# the one-time setup and the two repository variables it needs.
 name: Publish
 
 on:
-  push:
-    tags:
-      - 'bind_forms_core-v[0-9]+.[0-9]+.[0-9]+*'
-      - 'bind_forms_signals-v[0-9]+.[0-9]+.[0-9]+*'
-      - 'bind_forms-v[0-9]+.[0-9]+.[0-9]+*'
+  workflow_dispatch:
+    inputs:
+      package:
+        description: Package to release
+        required: true
+        type: choice
+        options: [bind_forms_core, bind_forms, bind_forms_signals]
+      version:
+        description: "Version to release (e.g. 0.1.0), without the leading 'v'. Must match the package's pubspec."
+        required: true
+        type: string
 
-permissions:
-  contents: read
-
+# One release per package at a time; never cancel a release midway.
 concurrency:
-  group: publish-${{ github.ref_name }}
+  group: ${{ github.workflow }}-${{ inputs.package }}
   cancel-in-progress: false
 
+permissions: {}
+
+# Inputs reach scripts through the environment only, never pasted into them.
+env:
+  PACKAGE: ${{ inputs.package }}
+  VERSION: ${{ inputs.version }}
+  TAG: ${{ inputs.package }}-v${{ inputs.version }}
+
 jobs:
+  # The version matches the pubspec and has a CHANGELOG entry, is neither on
+  # pub.dev nor tagged yet, and its workspace dependencies are already on
+  # pub.dev. Then the usual checks, on the exact commit that will ship.
   verify:
-    name: Verify ${{ github.ref_name }}
+    name: Verify ${{ inputs.package }} ${{ inputs.version }}
+    if: github.repository_owner == 'abdulhaq-e' && github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
     outputs:
-      package: ${{ steps.tag.outputs.package }}
-      dir: ${{ steps.tag.outputs.dir }}
+      dir: ${{ steps.check.outputs.dir }}
     steps:
       - uses: actions/checkout@v7
+        with:
+          ref: ${{ github.sha }}
 
-      # The tag matches the pubspec version, that version isn't published
-      # yet, and every workspace package it depends on is already on pub.dev.
-      - name: Check tag
-        id: tag
-        run: python3 tool/release.py verify-tag "$GITHUB_REF_NAME" >> "$GITHUB_OUTPUT"
+      - name: Check release
+        id: check
+        run: python3 tool/release.py verify "$PACKAGE" "$VERSION" >> "$GITHUB_OUTPUT"
 
       - uses: ./.github/actions/setup
 
@@ -44,31 +64,72 @@ jobs:
         run: dart analyze --fatal-infos
 
       - name: Test
-        working-directory: ${{ steps.tag.outputs.dir }}
+        working-directory: ${{ steps.check.outputs.dir }}
         run: |
           if grep -q 'sdk: flutter' pubspec.yaml; then flutter test; else dart test; fi
 
       - name: Validate package
-        working-directory: ${{ steps.tag.outputs.dir }}
+        working-directory: ${{ steps.check.outputs.dir }}
         run: flutter pub publish --dry-run
 
   publish:
-    name: Publish ${{ needs.verify.outputs.package }}
+    name: Publish to pub.dev
     needs: verify
     runs-on: ubuntu-latest
     environment: pub.dev
     permissions:
       contents: read
-      id-token: write # pub.dev automated publishing
+      id-token: write # Workload Identity Federation
     steps:
+      # Same commit the verify job checked; pub publishes from source.
       - uses: actions/checkout@v7
-
-      # Exchanges the GitHub OIDC token for pub.dev credentials. The token is
-      # short-lived, so this job does nothing slow after it.
-      - uses: dart-lang/setup-dart@v1
+        with:
+          ref: ${{ github.sha }}
 
       - uses: ./.github/actions/setup
 
+      - name: Authenticate to Google Cloud
+        id: auth
+        uses: google-github-actions/auth@v3
+        with:
+          workload_identity_provider: ${{ vars.GCP_WORKLOAD_IDENTITY_PROVIDER }}
+          service_account: ${{ vars.PUB_DEV_SERVICE_ACCOUNT }}
+          token_format: id_token
+          id_token_audience: https://pub.dev
+          id_token_include_email: true # pub.dev identifies the service account by email
+          create_credentials_file: false
+
       - name: Publish
         working-directory: ${{ needs.verify.outputs.dir }}
-        run: dart pub publish --force
+        env:
+          PUB_TOKEN: ${{ steps.auth.outputs.id_token }}
+        run: |
+          dart pub token add https://pub.dev --env-var PUB_TOKEN
+          dart pub publish --force
+
+  # Only once pub.dev publishing has succeeded. If this job fails, re-run it
+  # alone ("Re-run failed jobs"): it tags the same commit that was published.
+  tag-and-release:
+    name: Tag release and create GitHub Release
+    needs: publish
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write # push the tag and create the release
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ github.sha }}
+
+      - name: Tag and push
+        run: |
+          git tag "$TAG" "$GITHUB_SHA"
+          git push origin "$TAG"
+
+      - name: Create GitHub Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          python3 tool/release.py notes "$PACKAGE" "$VERSION" > notes.md
+          gh release create "$TAG" --verify-tag \
+            --title "$PACKAGE $VERSION" \
+            --notes-file notes.md
