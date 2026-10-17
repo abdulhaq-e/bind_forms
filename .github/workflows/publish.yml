@@ -1,11 +1,17 @@
-# Publishes a package to pub.dev when its release tag is pushed:
+# Releases a package when its tag is pushed:
 #
 #   bind_forms_core-v0.1.0   bind_forms-v0.1.0   bind_forms_signals-v0.1.0
 #
-# Uses pub.dev automated publishing (GitHub OIDC), so there are no secrets.
-# Each package must enable it on pub.dev (Admin > Automated publishing)
-# with this repository, tag pattern `<package>-v{{version}}`, and, if
-# required there, the `pub.dev` environment used below.
+# The tag is only the trigger; pub.dev's GitHub publishing (OIDC, no
+# secrets) requires one. The GitHub Release, the record of what shipped, is
+# created only after pub.dev accepted the package. If the release fails
+# before that, the tag is deleted again, so a failed release leaves nothing
+# behind: fix the problem and push the tag again.
+#
+# One-time setup per package on pub.dev: Admin > Automated publishing >
+# Enable publishing from GitHub Actions, with repository
+# abdulhaq-e/bind_forms, tag pattern `<package>-v{{version}}`, and the
+# `pub.dev` environment required.
 name: Publish
 
 on:
@@ -15,28 +21,35 @@ on:
       - 'bind_forms_signals-v[0-9]+.[0-9]+.[0-9]+*'
       - 'bind_forms-v[0-9]+.[0-9]+.[0-9]+*'
 
-permissions:
-  contents: read
+permissions: {}
 
 concurrency:
-  group: publish-${{ github.ref_name }}
+  group: ${{ github.workflow }}-${{ github.ref_name }}
   cancel-in-progress: false
 
+env:
+  TAG: ${{ github.ref_name }}
+
 jobs:
+  # The tag matches the pubspec version, which has a CHANGELOG entry, isn't
+  # on pub.dev yet, and whose workspace dependencies already are. Then the
+  # usual checks for that package.
   verify:
     name: Verify ${{ github.ref_name }}
+    if: github.repository_owner == 'abdulhaq-e'
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
     outputs:
       package: ${{ steps.tag.outputs.package }}
+      version: ${{ steps.tag.outputs.version }}
       dir: ${{ steps.tag.outputs.dir }}
     steps:
       - uses: actions/checkout@v7
 
-      # The tag matches the pubspec version, that version isn't published
-      # yet, and every workspace package it depends on is already on pub.dev.
       - name: Check tag
         id: tag
-        run: python3 tool/release.py verify-tag "$GITHUB_REF_NAME" >> "$GITHUB_OUTPUT"
+        run: python3 tool/release.py verify-tag "$TAG" >> "$GITHUB_OUTPUT"
 
       - uses: ./.github/actions/setup
 
@@ -53,7 +66,7 @@ jobs:
         run: flutter pub publish --dry-run
 
   publish:
-    name: Publish ${{ needs.verify.outputs.package }}
+    name: Publish ${{ needs.verify.outputs.package }} to pub.dev
     needs: verify
     runs-on: ubuntu-latest
     environment: pub.dev
@@ -72,3 +85,55 @@ jobs:
       - name: Publish
         working-directory: ${{ needs.verify.outputs.dir }}
         run: dart pub publish --force
+
+  # Only once pub.dev has the package. If this job fails, re-run it alone
+  # ("Re-run failed jobs"); the tag stays, since the version did ship.
+  release:
+    name: Create GitHub Release
+    needs: [verify, publish]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write # create the release
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Create release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TITLE: ${{ needs.verify.outputs.package }} ${{ needs.verify.outputs.version }}
+        run: |
+          python3 tool/release.py notes "$TAG" > notes.md
+          gh release create "$TAG" --verify-tag --title "$TITLE" --notes-file notes.md
+
+  # Anything before the publish failed, was rejected at the pub.dev
+  # environment, or was cancelled: delete the tag so it never points at a
+  # release that didn't happen. Checks pub.dev first, in case the upload
+  # went through just before a failure or cancellation.
+  cleanup:
+    name: Delete tag of failed release
+    needs: [verify, publish]
+    if: always() && github.repository_owner == 'abdulhaq-e' && needs.publish.result != 'success'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write # delete the tag
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Delete tag unless the version was published
+        run: |
+          status=0
+          python3 tool/release.py published "$TAG" || status=$?
+          case "$status" in
+            1)
+              git push origin ":refs/tags/$TAG"
+              echo "::notice::Deleted $TAG: nothing was published. Fix the failure and push the tag again."
+              ;;
+            0)
+              echo "::error::$TAG is on pub.dev although the publish job didn't succeed. Keeping the tag; create the release with: gh release create $TAG --verify-tag"
+              exit 1
+              ;;
+            *)
+              echo "::error::Couldn't tell whether $TAG was published, so the tag was kept. Check pub.dev, then delete the tag or create the release."
+              exit 1
+              ;;
+          esac"

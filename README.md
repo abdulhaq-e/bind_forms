@@ -13,15 +13,24 @@ Model-driven forms for Flutter that bind to real widgets instead of wrapping the
 ## CI and releases
 
 - **Pull requests** (`.github/workflows/pr.yml`): formatting, `dart analyze --fatal-infos`, every package's tests, and a `pub publish --dry-run` per package.
-- **Main** (`main.yml`): the same checks, a Linux release build of the example (which compiles every showcased plugin), and a release-status summary of which package versions aren't on pub.dev yet.
-- **Publish** (`publish.yml`): pushing a tag `<package>-v<version>` verifies and tests that package, then publishes it to pub.dev with automated publishing (GitHub OIDC, no secrets).
+- **Main** (`main.yml`): the same checks, a Linux release build of the example (which compiles every showcased plugin), and a release-status summary of what is ready to release.
+- **Publish** (`publish.yml`): pushing a tag `<package>-v<version>` verifies and tests that package, publishes it to pub.dev, and only then creates the GitHub Release. If anything fails before pub.dev accepts the package, the workflow deletes the tag again, so a failed release leaves nothing behind.
 
-To release, bump `version` and `CHANGELOG.md` in the package, merge to main, then push the tag the main run's summary shows:
+### Releasing
 
-```sh
-git tag bind_forms_core-v0.1.0 && git push origin bind_forms_core-v0.1.0
-```
+1. In a PR, bump `version` in the package's `pubspec.yaml` and add a `## <version>` entry to its `CHANGELOG.md`. Merge it.
+2. Push the tag the main run's summary shows, e.g.:
 
-Publish `bind_forms_core` before the packages that depend on it; the publish workflow refuses a package whose workspace dependencies aren't on pub.dev yet. `tool/release.py status` shows the same summary locally.
+   ```sh
+   git tag bind_forms_core-v0.1.0 && git push origin bind_forms_core-v0.1.0
+   ```
 
-One-time setup per package: publish the first version by hand (`dart pub publish` in the package directory), then on pub.dev enable **Admin → Automated publishing** for this repository with tag pattern `<package>-v{{version}}`. Optionally require the `pub.dev` GitHub environment there and add reviewers to it in the repository settings.
+3. If the release fails, the tag is deleted: fix the problem and push the tag again. If only the GitHub Release step failed (the package did ship), re-run that job.
+
+Release `bind_forms_core` before the packages that depend on it; Publish refuses a package whose workspace dependencies aren't on pub.dev yet, a version that is already published, and a version without a CHANGELOG entry. `python3 tool/release.py status` shows the summary locally.
+
+### One-time setup
+
+1. Publish the first version of each package by hand (`dart pub publish` in its directory); pub.dev only enables automated publishing on an existing package.
+2. On pub.dev, for each package: **Admin → Automated publishing → Enable publishing from GitHub Actions**, with repository `abdulhaq-e/bind_forms`, tag pattern `<package>-v{{version}}` (e.g. `bind_forms_core-v{{version}}`), and **Require GitHub Actions environment** set to `pub.dev`.
+3. In the GitHub repository settings, create the `pub.dev` environment, ideally with yourself as a required reviewer so every publish waits for approval. Rejecting the approval counts as a failed release: the tag is deleted.
