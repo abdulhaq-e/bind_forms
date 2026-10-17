@@ -29,18 +29,9 @@ mixin FormControlErrorTextMixin<T> on Listenable {
   ///
   /// Requires a [BuildContext] only to fall back to app-wide
   /// [BindFormsConfig.validationMessages]; nothing else here needs one.
-  String? errorText(BuildContext context) {
-    final shouldShowErrors =
-        showErrors?.call(control) ?? (control.invalid && control.touched);
-    if (!control.hasErrors || !shouldShowErrors) {
-      return null;
-    }
-
-    final errorKey = control.errors.keys.first;
-    final message =
-        validationMessages?[errorKey] ??
-        BindFormsConfig.of(context)?.validationMessages[errorKey];
-
-    return message != null ? message(control.getError(errorKey)!) : errorKey;
-  }
+  String? errorText(BuildContext context) => control.errorText(
+    validationMessages: validationMessages,
+    fallbackMessages: BindFormsConfig.of(context)?.validationMessages,
+    showErrors: showErrors,
+  );
 }
