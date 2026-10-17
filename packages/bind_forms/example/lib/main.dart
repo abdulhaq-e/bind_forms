@@ -2,6 +2,7 @@ import 'package:bind_forms/bind_forms.dart';
 import 'package:material_ui/material_ui.dart';
 
 import 'login_page.dart';
+import 'signals_page.dart';
 import 'showcase/demo.dart';
 import 'showcase/design_systems.dart';
 import 'showcase/flutter_widgets.dart';
@@ -43,6 +44,12 @@ class CatalogPage extends StatelessWidget {
       'A complete form: validation, errors on blur, submit',
       Icons.login,
       LoginPage.new,
+    ),
+    (
+      'Signals',
+      'The login form observed with bind_forms_signals',
+      Icons.bolt,
+      SignalsPage.new,
     ),
     (
       'Flutter widgets',

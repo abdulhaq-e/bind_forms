@@ -57,6 +57,7 @@ void main() {
     await tester.pumpWidget(const MyApp());
 
     for (final (title, _, _, _) in CatalogPage.sections) {
+      await tester.scrollUntilVisible(find.text(title), 100);
       await tester.tap(find.text(title));
       await tester.pumpAndSettle();
       expect(find.byType(AppBar), findsOneWidget);

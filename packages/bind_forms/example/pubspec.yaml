@@ -11,8 +11,10 @@ dependencies:
   flutter:
     sdk: flutter
   bind_forms: ^0.0.1
+  bind_forms_signals: ^0.0.1
   cupertino_ui: ^1.0.0
   material_ui: ^1.7.0
+  signals_flutter: ^7.1.0
 
   # Third-party widgets showcased without wrappers. Each one has a
   # reactive_forms_widgets wrapper package that re-declares its constructor.
