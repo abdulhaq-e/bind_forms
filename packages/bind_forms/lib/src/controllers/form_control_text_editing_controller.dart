@@ -19,34 +19,29 @@ import 'package:material_ui/material_ui.dart' show TimeOfDay;
 /// typing or from the control), and when the control's status or touched
 /// state changes (so [errorText] stays current).
 ///
-/// "Touched" is driven by focus, not typing, so register a
-/// [FocusNodeController] with the same [control] if you want errors to
-/// appear on blur:
+/// "Touched" is driven by focus, not typing, so pass [focusNode] to the
+/// widget if you want errors to appear on blur:
 ///
 /// ```dart
 /// final controller = FormControlTextEditingController<String>(
 ///   form.control('email') as FormControl<String>,
 /// );
-/// final focusController = FocusNodeController();
-/// controller.control.registerFocusController(focusController);
 ///
 /// // ... in build():
 /// ListenableBuilder(
 ///   listenable: controller,
 ///   builder: (context, _) => TextField(
 ///     controller: controller,
-///     focusNode: focusController.focusNode,
+///     focusNode: controller.focusNode,
 ///     decoration: InputDecoration(errorText: controller.errorText(context)),
 ///   ),
 /// );
 ///
 /// // ... in dispose():
-/// controller.control.unregisterFocusController(focusController);
-/// focusController.dispose();
 /// controller.dispose();
 /// ```
 class FormControlTextEditingController<T> extends TextEditingController
-    with FormControlErrorTextMixin<T> {
+    with FormControlErrorTextMixin<T>, FormControlFocusMixin<T> {
   /// The control this controller is bound to.
   @override
   final FormControl<T> control;
@@ -73,12 +68,17 @@ class FormControlTextEditingController<T> extends TextEditingController
   /// omitted, one is picked from the control's type: [IntValueAccessor],
   /// [DoubleValueAccessor], [DateTimeValueAccessor], [TimeOfDayValueAccessor],
   /// or [DefaultValueAccessor] for anything else.
+  ///
+  /// If [focusNode] is provided, [this.focusNode] returns it instead of a
+  /// node owned by this controller.
   FormControlTextEditingController(
     this.control, {
     ControlValueAccessor<T, String>? valueAccessor,
     this.validationMessages,
     this.showErrors,
+    FocusNode? focusNode,
   }) : _valueAccessor = valueAccessor ?? _defaultValueAccessorFor<T>(control) {
+    useFocusNode(focusNode);
     text = _syncedText = _valueAccessor.modelToViewValue(control.value) ?? '';
     // Registered before [_onControlChanged], so that on a value change from
     // the control the text is already updated when [_onControlChanged] runs.
@@ -148,6 +148,7 @@ class FormControlTextEditingController<T> extends TextEditingController
     removeListener(_onTextChanged);
     control.removeListener(_onControlChanged);
     _valueAccessor.dispose();
+    disposeFocusController();
     super.dispose();
   }
 }

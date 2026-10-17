@@ -71,24 +71,8 @@ class _LoginPageState extends State<LoginPage> {
         control.invalid && (control.dirty || control.touched),
   );
 
-  // "Touched" comes from focus loss, so text fields need a focus controller
-  // registered with their control for errors to appear on blur.
-  final _emailFocus = FocusNodeController();
-  final _passwordFocus = FocusNodeController();
-
-  @override
-  void initState() {
-    super.initState();
-    _email.control.registerFocusController(_emailFocus);
-    _password.control.registerFocusController(_passwordFocus);
-  }
-
   @override
   void dispose() {
-    _email.control.unregisterFocusController(_emailFocus);
-    _password.control.unregisterFocusController(_passwordFocus);
-    _emailFocus.dispose();
-    _passwordFocus.dispose();
     _email.dispose();
     _password.dispose();
     _acceptTerms.dispose();
@@ -124,7 +108,7 @@ class _LoginPageState extends State<LoginPage> {
               listenable: _email,
               builder: (context, _) => TextField(
                 controller: _email,
-                focusNode: _emailFocus.focusNode,
+                focusNode: _email.focusNode,
                 decoration: InputDecoration(
                   labelText: 'Email',
                   border: const OutlineInputBorder(),
@@ -139,7 +123,7 @@ class _LoginPageState extends State<LoginPage> {
               listenable: _password,
               builder: (context, _) => TextField(
                 controller: _password,
-                focusNode: _passwordFocus.focusNode,
+                focusNode: _password.focusNode,
                 decoration: InputDecoration(
                   labelText: 'Password',
                   border: const OutlineInputBorder(),
@@ -164,13 +148,12 @@ class _LoginPageState extends State<LoginPage> {
             const SizedBox(height: 24.0),
             ElevatedButton(onPressed: _login, child: const Text('Login')),
             const SizedBox(height: 20),
-            // The form's status as a stream: any change to any field
-            // recalculates it, and the stream gets one event per change.
-            StreamBuilder<ControlStatus>(
-              stream: form.statusChanged,
-              initialData: form.status,
-              builder: (context, snapshot) => ElevatedButton(
-                onPressed: snapshot.data == ControlStatus.valid ? _login : null,
+            // Any control is a Listenable, with nothing to create or
+            // dispose. A change to any field notifies the form once.
+            ListenableBuilder(
+              listenable: form.listenable,
+              builder: (context, _) => ElevatedButton(
+                onPressed: form.valid ? _login : null,
                 child: const Text('Login (enabled when valid)'),
               ),
             ),

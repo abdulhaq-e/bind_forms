@@ -3,7 +3,7 @@
 // found in the LICENSE file.
 
 import 'package:bind_forms/bind_forms.dart';
-import 'package:flutter/foundation.dart';
+import 'package:flutter/widgets.dart';
 
 /// A [ChangeNotifier] that stays in sync with a [FormControl], for widgets
 /// that take a plain `value` + `onChanged` pair instead of a controller
@@ -18,35 +18,30 @@ import 'package:flutter/foundation.dart';
 /// Listeners are notified once per control operation that changes the
 /// control's value, status, or touched state.
 ///
-/// "Touched" is driven by focus, not by toggling, so register a
-/// [FocusNodeController] with the same [control] if you want errors to
-/// appear on blur:
+/// "Touched" is driven by focus, not by toggling, so pass [focusNode] to
+/// the widget if you want errors to appear on blur:
 ///
 /// ```dart
 /// final notifier = FormControlValueNotifier<bool>(
 ///   form.control('accept') as FormControl<bool>,
 /// );
-/// final focusController = FocusNodeController();
-/// notifier.control.registerFocusController(focusController);
 ///
 /// // ... in build():
 /// ListenableBuilder(
 ///   listenable: notifier,
 ///   builder: (context, _) => Checkbox(
 ///     value: notifier.value ?? false,
-///     focusNode: focusController.focusNode,
+///     focusNode: notifier.focusNode,
 ///     isError: notifier.errorText(context) != null,
 ///     onChanged: notifier.enabled ? notifier.onChanged : null,
 ///   ),
 /// );
 ///
 /// // ... in dispose():
-/// notifier.control.unregisterFocusController(focusController);
-/// focusController.dispose();
 /// notifier.dispose();
 /// ```
 class FormControlValueNotifier<T> extends ChangeNotifier
-    with FormControlErrorTextMixin<T> {
+    with FormControlErrorTextMixin<T>, FormControlFocusMixin<T> {
   @override
   final FormControl<T> control;
 
@@ -57,11 +52,16 @@ class FormControlValueNotifier<T> extends ChangeNotifier
   final ShowErrorsFunction<T>? showErrors;
 
   /// Creates a notifier bound to [control].
+  ///
+  /// If [focusNode] is provided, [this.focusNode] returns it instead of a
+  /// node owned by this notifier.
   FormControlValueNotifier(
     this.control, {
     this.validationMessages,
     this.showErrors,
+    FocusNode? focusNode,
   }) {
+    useFocusNode(focusNode);
     control.addListener(_onControlChanged);
   }
 
@@ -93,6 +93,7 @@ class FormControlValueNotifier<T> extends ChangeNotifier
   @override
   void dispose() {
     control.removeListener(_onControlChanged);
+    disposeFocusController();
     super.dispose();
   }
 }
