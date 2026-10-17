@@ -35,10 +35,9 @@ class BindFormsConfig extends InheritedWidget {
 
   /// Returns the nearest [BindFormsConfig] up the widget tree, or `null` if
   /// there is none.
-  static BindFormsConfig? of(BuildContext context) {
-    final element = context
-        .getElementForInheritedWidgetOfExactType<BindFormsConfig>();
-
-    return element != null ? (element.widget as BindFormsConfig) : null;
-  }
+  ///
+  /// [context] depends on it, so it rebuilds when the configuration changes
+  /// (e.g. new messages after a locale change).
+  static BindFormsConfig? of(BuildContext context) =>
+      context.dependOnInheritedWidgetOfExactType<BindFormsConfig>();
 }

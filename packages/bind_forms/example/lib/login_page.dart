@@ -26,13 +26,13 @@ class _LoginPageState extends State<LoginPage> {
   // it to its control, so every widget parameter (keyboardType,
   // obscureText, title, ...) is just that widget's own parameter.
   late final _email = FormControlTextEditingController<String>(
-    form.control('email') as FormControl<String>,
+    form.formControl<String>('email'),
     validationMessages: {
       ValidationMessage.email: (_) => 'The email value must be a valid email',
     },
   );
   late final _password = FormControlTextEditingController<String>(
-    form.control('password') as FormControl<String>,
+    form.formControl<String>('password'),
     validationMessages: {
       ValidationMessage.minLength: (error) =>
           'The password must be at least '
@@ -40,7 +40,7 @@ class _LoginPageState extends State<LoginPage> {
     },
   );
   late final _acceptTerms = FormControlValueNotifier<bool>(
-    form.control('acceptTerms') as FormControl<bool>,
+    form.formControl<bool>('acceptTerms'),
     // A checkbox is rarely focused and blurred, so show its error as soon
     // as the user has toggled it or tried to submit.
     showErrors: (control) =>

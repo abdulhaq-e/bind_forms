@@ -27,10 +27,10 @@ class _SignalsPageState extends State<SignalsPage> {
   });
 
   late final _email = FormControlTextEditingController<String>(
-    form.control('email') as FormControl<String>,
+    form.formControl<String>('email'),
   );
   late final _password = FormControlTextEditingController<String>(
-    form.control('password') as FormControl<String>,
+    form.formControl<String>('password'),
   );
 
   // Computeds: created once, recomputed only when what they read changes.

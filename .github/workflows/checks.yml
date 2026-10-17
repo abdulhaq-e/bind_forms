@@ -32,6 +32,8 @@ jobs:
             command: dart test
           - package: bind_forms_signals
             command: dart test
+          - package: bind_forms_streams
+            command: dart test
           - package: bind_forms
             command: flutter test
           - package: bind_forms/example
@@ -50,7 +52,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        package: [bind_forms_core, bind_forms_signals, bind_forms]
+        package: [bind_forms_core, bind_forms_signals, bind_forms_streams, bind_forms]
     steps:
       - uses: actions/checkout@v7
       - uses: ./.github/actions/setup

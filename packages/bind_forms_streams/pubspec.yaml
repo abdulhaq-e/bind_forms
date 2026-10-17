@@ -1,0 +1,16 @@
+name: bind_forms_streams
+description: Streams for bind_forms_core controls (valueChanges, statusChanged, ...). Pure Dart.
+version: 0.0.1
+repository: https://github.com/abdulhaq-e/bind_forms/tree/main/packages/bind_forms_streams
+issue_tracker: https://github.com/abdulhaq-e/bind_forms/issues
+resolution: workspace
+
+environment:
+  sdk: ^3.13.3
+
+dependencies:
+  bind_forms_core: ^0.0.1
+
+dev_dependencies:
+  lints: ^6.0.0
+  test: ^1.25.6

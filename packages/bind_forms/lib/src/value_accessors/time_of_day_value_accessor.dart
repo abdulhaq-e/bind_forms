@@ -2,11 +2,15 @@
 // Use of this source code is governed by the MIT license that can be
 // found in the LICENSE file.
 
-import 'package:material_ui/material_ui.dart';
-import 'package:bind_forms/bind_forms.dart';
+import 'package:bind_forms_core/bind_forms_core.dart';
+import 'package:material_ui/material_ui.dart' show TimeOfDay;
 
 /// Represents a control value accessor that convert between data types
 /// [TimeOfDay] and [String].
+///
+/// This is material_ui's [TimeOfDay], which is a different type from
+/// flutter/material's. Text adapters don't pick it on their own: pass it as
+/// their `valueAccessor`.
 class TimeOfDayValueAccessor extends ControlValueAccessor<TimeOfDay, String> {
   @override
   String modelToViewValue(TimeOfDay? modelValue) {

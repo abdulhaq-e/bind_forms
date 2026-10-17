@@ -4,7 +4,6 @@
 
 import 'package:bind_forms/bind_forms.dart';
 import 'package:flutter/widgets.dart';
-import 'package:material_ui/material_ui.dart' show TimeOfDay;
 
 /// Called after [control] changes. [textNotified] is true when the
 /// [TextEditingController] already notified its listeners for this change:
@@ -103,8 +102,6 @@ class TextControlSync<T> {
       return DoubleValueAccessor() as ControlValueAccessor<K, String>;
     } else if (control is FormControl<DateTime>) {
       return DateTimeValueAccessor() as ControlValueAccessor<K, String>;
-    } else if (control is FormControl<TimeOfDay>) {
-      return TimeOfDayValueAccessor() as ControlValueAccessor<K, String>;
     }
 
     return DefaultValueAccessor<K, String>();

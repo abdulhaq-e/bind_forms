@@ -29,9 +29,9 @@ void main() {
       final notifier = FormControlValueNotifier(control);
       addTearDown(notifier.dispose);
 
-      expect(control.focusController, isNull);
+      expect(control.focusControllers, isEmpty);
       notifier.focusNode;
-      expect(control.focusController, isA<FocusNodeController>());
+      expect(control.focusControllers.single, isA<FocusNodeController>());
     });
 
     test('dispose unregisters the focus controller', () {
@@ -41,7 +41,7 @@ void main() {
 
       controller.dispose();
 
-      expect(control.focusController, isNull);
+      expect(control.focusControllers, isEmpty);
     });
 
     test('a provided focus node is used and not disposed', () {

@@ -244,11 +244,18 @@ void main() {
 
       final value = 'Reactive Forms';
 
-      // Expect: form notify value changes
-      expectLater(form.valueChanges, emits({'name': value}));
+      final values = <Map<String, Object?>>[];
+      form.addListener((changes) {
+        if (changes.value) values.add(form.value);
+      });
 
       // When: change value of the control
       form.control('name').value = 'Reactive Forms';
+
+      // Expect: form notify value changes
+      expect(values, [
+        {'name': value},
+      ]);
     });
 
     test('When a group is disable then all children are disabled', () {

@@ -9,6 +9,7 @@ workspace:
   - packages/bind_forms
   - packages/bind_forms/example
   - packages/bind_forms_signals
+  - packages/bind_forms_streams
 
 dev_dependencies:
   lints: ^6.0.0

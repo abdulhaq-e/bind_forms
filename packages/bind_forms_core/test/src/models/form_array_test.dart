@@ -293,11 +293,18 @@ void main() {
 
       final value = 'Reactive Forms';
 
-      // Expect: array notify value changes
-      expectLater(array.valueChanges, emits([value]));
+      final values = <List<dynamic>?>[];
+      array.addListener((changes) {
+        if (changes.value) values.add(array.value);
+      });
 
       // When: change value of a control
       array.control('0').value = value;
+
+      // Expect: array notify value changes
+      expect(values, [
+        [value],
+      ]);
     });
 
     test('Remove control', () {

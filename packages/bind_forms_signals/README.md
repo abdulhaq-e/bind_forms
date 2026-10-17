@@ -4,7 +4,7 @@ Any bind_forms control's state as [signals](https://pub.dev/packages/signals).
 Pure Dart: depends only on `bind_forms_core` and `signals_core`.
 
 ```dart
-final email = form.control('email') as FormControl<String>;
+final email = form.formControl<String>('email');
 final s = email.signals; // same instance every time, nothing to dispose
 
 s.value;    // ReadonlySignal<String?>

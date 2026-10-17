@@ -1,6 +1,7 @@
 # Releases a package when its tag is pushed:
 #
 #   bind_forms_core-v0.1.0   bind_forms-v0.1.0   bind_forms_signals-v0.1.0
+#   bind_forms_streams-v0.1.0
 #
 # The tag is only the trigger; pub.dev's GitHub publishing (OIDC, no
 # secrets) requires one. The GitHub Release, the record of what shipped, is
@@ -19,6 +20,7 @@ on:
     tags:
       - 'bind_forms_core-v[0-9]+.[0-9]+.[0-9]+*'
       - 'bind_forms_signals-v[0-9]+.[0-9]+.[0-9]+*'
+      - 'bind_forms_streams-v[0-9]+.[0-9]+.[0-9]+*'
       - 'bind_forms-v[0-9]+.[0-9]+.[0-9]+*'
 
 permissions: {}

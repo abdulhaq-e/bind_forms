@@ -47,11 +47,13 @@ class FormControlTextEditingController<T> extends TextEditingController
   @override
   final FormControl<T> control;
 
+  /// Can be changed at any time; [errorText] reads it on every call.
   @override
-  final Map<String, ValidationMessageFunction>? validationMessages;
+  Map<String, ValidationMessageFunction>? validationMessages;
 
+  /// Can be changed at any time; [errorText] reads it on every call.
   @override
-  final ShowErrorsFunction<T>? showErrors;
+  ShowErrorsFunction<T>? showErrors;
 
   late final TextControlSync<T> _sync;
 
@@ -59,8 +61,10 @@ class FormControlTextEditingController<T> extends TextEditingController
   ///
   /// [valueAccessor] converts between the control's value and the text. If
   /// omitted, one is picked from the control's type: [IntValueAccessor],
-  /// [DoubleValueAccessor], [DateTimeValueAccessor], [TimeOfDayValueAccessor],
-  /// or [DefaultValueAccessor] for anything else.
+  /// [DoubleValueAccessor], [DateTimeValueAccessor], or
+  /// [DefaultValueAccessor] for anything else. For other types, such as
+  /// `TimeOfDay` (`TimeOfDayValueAccessor` from
+  /// `package:bind_forms/material_ui.dart`), pass one.
   ///
   /// If [focusNode] is provided, [this.focusNode] returns it instead of a
   /// node owned by this controller.

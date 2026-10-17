@@ -45,11 +45,13 @@ class FormControlValueNotifier<T> extends ChangeNotifier
   @override
   final FormControl<T> control;
 
+  /// Can be changed at any time; [errorText] reads it on every call.
   @override
-  final Map<String, ValidationMessageFunction>? validationMessages;
+  Map<String, ValidationMessageFunction>? validationMessages;
 
+  /// Can be changed at any time; [errorText] reads it on every call.
   @override
-  final ShowErrorsFunction<T>? showErrors;
+  ShowErrorsFunction<T>? showErrors;
 
   /// Creates a notifier bound to [control].
   ///

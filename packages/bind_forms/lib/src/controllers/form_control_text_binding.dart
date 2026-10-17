@@ -45,11 +45,13 @@ class FormControlTextBinding<T> extends ChangeNotifier
   /// yourself, after this binding.
   final TextEditingController textController;
 
+  /// Can be changed at any time; [errorText] reads it on every call.
   @override
-  final Map<String, ValidationMessageFunction>? validationMessages;
+  Map<String, ValidationMessageFunction>? validationMessages;
 
+  /// Can be changed at any time; [errorText] reads it on every call.
   @override
-  final ShowErrorsFunction<T>? showErrors;
+  ShowErrorsFunction<T>? showErrors;
 
   late final TextControlSync<T> _sync;
 

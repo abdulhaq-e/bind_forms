@@ -111,11 +111,9 @@ abstract final class _Batch {
 ///
 /// It shouldn't be instantiated directly.
 abstract class AbstractControl<T> {
-  final _statusChanges = StreamController<ControlStatus>.broadcast();
-  final _valueChanges = StreamController<T?>.broadcast();
-  final _touchChanges = StreamController<bool>.broadcast();
   final List<ControlListener> _listeners = [];
   bool _disposed = false;
+  Completer<void>? _whenDisposed;
   final List<Validator<dynamic>> _validators = <Validator<dynamic>>[];
   final List<AsyncValidator<dynamic>> _asyncValidators =
       <AsyncValidator<dynamic>>[];
@@ -214,9 +212,8 @@ abstract class AbstractControl<T> {
   /// control. This argument is only taking into account if [autoValidate] is
   /// equals to `true`.
   ///
-  /// When [emitEvent] is true or not supplied (the default), both the
-  /// *statusChanges* and *valueChanges* emit events with the latest status
-  /// and value when the control is reset. When false, no events are emitted.
+  /// When [emitEvent] is true or not supplied (the default), listeners
+  /// are notified with the latest status and value when the control is reset. When false, no events are emitted.
   /// This argument is only taking into account if [autoValidate] is equals to
   /// `true`.
   void setValidators(
@@ -276,9 +273,8 @@ abstract class AbstractControl<T> {
   /// control. This argument is only taking into account if [autoValidate] is
   /// equals to `true`.
   ///
-  /// When [emitEvent] is true or not supplied (the default), both the
-  /// *statusChanges* and *valueChanges* emit events with the latest status
-  /// and value when the control is reset. When false, no events are emitted.
+  /// When [emitEvent] is true or not supplied (the default), listeners
+  /// are notified with the latest status and value when the control is reset. When false, no events are emitted.
   /// This argument is only taking into account if [autoValidate] is equals to
   /// `true`.
   void setAsyncValidators(
@@ -336,10 +332,9 @@ abstract class AbstractControl<T> {
   /// Registers [listener] to be called synchronously, once per operation,
   /// whenever this control changes.
   ///
-  /// This is the primitive every other change notification is built on:
-  /// [valueChanges], [statusChanged] and [touchChanges] are fed from the same
-  /// batched notification, and UI adapters (`Listenable`, streams, signals)
-  /// should be too.
+  /// This is the primitive every other change notification is built on: UI
+  /// and state-management adapters (`Listenable`, streams, signals) should
+  /// all be fed from it.
   ///
   /// ### Example:
   /// ```dart
@@ -370,8 +365,6 @@ abstract class AbstractControl<T> {
       return;
     }
 
-    _emitStreams(bits);
-
     final changes = ControlChanges._(bits);
     for (final listener in List.of(_listeners)) {
       // Skip listeners removed by an earlier listener in this same delivery.
@@ -385,28 +378,6 @@ abstract class AbstractControl<T> {
       }
     }
   }
-
-  void _emitStreams(int bits) {
-    if (bits & _valueBit != 0) {
-      _valueChanges.add(value);
-    }
-    if (bits & _statusBit != 0) {
-      _statusChanges.add(_status);
-    }
-    if (bits & _touchedBit != 0) {
-      _touchChanges.add(_touched);
-    }
-  }
-
-  /// A [Stream] that emits the status every time it changes.
-  Stream<ControlStatus> get statusChanged => _statusChanges.stream;
-
-  /// A [Stream] that emits the value of the control every time it changes.
-  Stream<T?> get valueChanges => _valueChanges.stream;
-
-  /// A [Stream] that emits an event every time the control
-  /// is touched or untouched.
-  Stream<bool> get touchChanges => _touchChanges.stream;
 
   /// A control is valid when its [status] is ControlStatus.valid.
   bool get valid => status == ControlStatus.valid;
@@ -495,9 +466,8 @@ abstract class AbstractControl<T> {
   /// When [updateParent] is false, mark only this control. When true or not
   /// supplied, marks all direct ancestors. Default is true.
   ///
-  /// When [emitEvent] is true or not supplied (the default), the
-  /// *statusChanges* emit event with the latest status when the control is
-  /// mark dirty. When false, no events are emitted.
+  /// When [emitEvent] is true or not supplied (the default), listeners
+  /// are notified with the latest status when the control is marked dirty. When false, no events are emitted.
   void markAsDirty({bool updateParent = true, bool emitEvent = true}) {
     _Batch.run(() {
       _pristine = false;
@@ -619,10 +589,9 @@ abstract class AbstractControl<T> {
   /// When [updateParent] is false, mark only this control. When true or not
   /// supplied, marks all direct ancestors. Default is true.
   ///
-  /// When [emitEvent] is true or not supplied (the default), [valueChanges]
-  /// and [statusChanged] events are emitted if value or status change.
-  /// Otherwise the control update this values but none of this events are
-  /// emitted.
+  /// When [emitEvent] is true or not supplied (the default), listeners
+  /// are notified if value or status change. Otherwise the control updates
+  /// these values without notifying.
   void markAsEnabled({bool updateParent = true, bool emitEvent = true}) {
     _Batch.run(() {
       if (enabled) {
@@ -643,8 +612,8 @@ abstract class AbstractControl<T> {
   /// When [updateParent] is false, mark only this control. When true or not
   /// supplied, marks all direct ancestors. Default is true.
   ///
-  /// When [emitEvent] is true or not supplied (the default), a [statusChanged]
-  /// event is emitted.
+  /// When [emitEvent] is true or not supplied (the default), listeners are
+  /// notified of the status change.
   void markAsDisabled({bool updateParent = true, bool emitEvent = true}) {
     _Batch.run(() {
       if (disabled) {
@@ -669,8 +638,8 @@ abstract class AbstractControl<T> {
   /// When [updateParent] is false, mark only this control. When true or not
   /// supplied, marks all direct ancestors. Default is true.
   ///
-  /// When [emitEvent] is true or not supplied (the default), a [statusChanged]
-  /// event is emitted.
+  /// When [emitEvent] is true or not supplied (the default), listeners are
+  /// notified of the status change.
   ///
   void markAsPending({bool updateParent = true, bool emitEvent = true}) {
     _Batch.run(() {
@@ -686,14 +655,28 @@ abstract class AbstractControl<T> {
     });
   }
 
-  /// Disposes the control
+  /// Completes when the control is disposed, or right away if it already
+  /// is.
+  ///
+  /// For adapters that hold resources for as long as the control lives,
+  /// e.g. to close the streams they feed from [addListener].
+  Future<void> get whenDisposed => _disposed
+      ? Future<void>.value()
+      : (_whenDisposed ??= Completer<void>()).future;
+
+  /// Disposes the control.
+  ///
+  /// Listeners are removed and [whenDisposed] completes. Changing the
+  /// control afterwards throws.
   void dispose() {
+    if (_disposed) {
+      return;
+    }
+
     _disposed = true;
     _listeners.clear();
     _Batch._pending.remove(this);
-    _statusChanges.close();
-    _valueChanges.close();
-    _touchChanges.close();
+    _whenDisposed?.complete();
     _asyncValidationSubscription?.cancel();
     _debounceTimer?.cancel();
   }
@@ -704,9 +687,8 @@ abstract class AbstractControl<T> {
   /// affects this control and its parent, otherwise only affects to this
   /// control.
   ///
-  /// When [emitEvent] is true or not supplied (the default), both the
-  /// *statusChanges* and *valueChanges* emit events with the latest status
-  /// and value when the control is reset. When false, no events are emitted.
+  /// When [emitEvent] is true or not supplied (the default), listeners
+  /// are notified with the latest status and value when the control is reset. When false, no events are emitted.
   void updateValue(T? value, {bool updateParent = true, bool emitEvent = true});
 
   /// Patches the value of the control.
@@ -715,9 +697,8 @@ abstract class AbstractControl<T> {
   /// affects this control and its parent, otherwise only affects to this
   /// control.
   ///
-  /// When [emitEvent] is true or not supplied (the default), both the
-  /// *statusChanges* and *valueChanges* emit events with the latest status
-  /// and value when the control is reset. When false, no events are emitted.
+  /// When [emitEvent] is true or not supplied (the default), listeners
+  /// are notified with the latest status and value when the control is reset. When false, no events are emitted.
   void patchValue(T? value, {bool updateParent = true, bool emitEvent = true});
 
   /// Resets the control, marking it as untouched, pristine and setting the
@@ -743,9 +724,8 @@ abstract class AbstractControl<T> {
   /// affects this control and its parent, otherwise only affects to this
   /// control.
   ///
-  /// When [emitEvent] is true or not supplied (the default), both the
-  /// *statusChanges* and *valueChanges* events notify listeners with the
-  /// latest status and value when the control is reset. When false, no events
+  /// When [emitEvent] is true or not supplied (the default), listeners
+  /// are notified with the latest status and value when the control is reset. When false, no events
   /// are emitted.
   ///
   /// ### FormControl example
@@ -915,9 +895,8 @@ abstract class AbstractControl<T> {
   /// affects this control and its parent, otherwise only affects to this
   /// control.
   ///
-  /// When [emitEvent] is true or not supplied (the default), both the
-  /// *statusChanges* and *valueChanges* emit events with the latest status
-  /// and value when the control is reset. When false, no events are emitted.
+  /// When [emitEvent] is true or not supplied (the default), listeners
+  /// are notified with the latest status and value when the control is reset. When false, no events are emitted.
   void updateValueAndValidity({
     bool updateParent = true,
     bool emitEvent = true,
@@ -1099,8 +1078,7 @@ abstract class AbstractControl<T> {
 /// Tracks the value and validation status of an individual form control.
 class FormControl<T> extends AbstractControl<T> {
   T? _defaultValue;
-  final _focusChanges = StreamController<bool>.broadcast();
-  FocusController? _focusController;
+  final Map<FocusController, void Function()> _focusControllers = {};
   bool _hasFocus = false;
 
   /// Creates a new FormControl instance.
@@ -1171,41 +1149,30 @@ class FormControl<T> extends AbstractControl<T> {
   /// True if the control is marked as focused.
   bool get hasFocus => _hasFocus;
 
-  /// Gets the focus controller registered with in this control.
+  /// The focus controllers registered with this control, in registration
+  /// order.
   ///
-  /// Don't use [focusController] to add/remove focus to a control,
-  /// use instead **control.focus()** and **control.unfocus()**.
+  /// Don't use them to add/remove focus to a control, use instead
+  /// **control.focus()** and **control.unfocus()**.
   ///
-  /// Don't use [focusController] to know if the control has focus, use instead
+  /// Don't use them to know if the control has focus, use instead
   /// **control.hasFocus**.
   ///
-  /// Use only [focusController] if you need the UI-specific focus object
-  /// behind it (e.g. the Flutter `FocusNode` of a `FocusNodeController`).
-  /// See also [focus()].
+  /// Use them only if you need the UI-specific focus object behind one
+  /// (e.g. the Flutter `FocusNode` of a `FocusNodeController`).
   ///
-  /// See also [unfocus()].
-  ///
-  /// See also [hasFocus].
-  FocusController? get focusController => _focusController;
+  /// See also [registerFocusController].
+  List<FocusController> get focusControllers =>
+      List.unmodifiable(_focusControllers.keys);
 
-  /// Disposes the control
+  /// Disposes the control and unregisters its focus controllers.
   @override
   void dispose() {
-    _focusChanges.close();
+    for (final controller in List.of(_focusControllers.keys)) {
+      unregisterFocusController(controller);
+    }
     super.dispose();
   }
-
-  @override
-  void _emitStreams(int bits) {
-    super._emitStreams(bits);
-    if (bits & _focusBit != 0) {
-      _focusChanges.add(_hasFocus);
-    }
-  }
-
-  /// A [Stream] that emits an event every time the focus status of
-  /// the control changes.
-  Stream<bool> get focusChanges => _focusChanges.stream;
 
   /// Removes focus from the UI element bound to this control without the interaction
   /// of the user.
@@ -1252,49 +1219,64 @@ class FormControl<T> extends AbstractControl<T> {
     });
   }
 
-  /// Removes the provided [focusController] from the control.
+  /// Removes [focusController] from the control. Does nothing if it isn't
+  /// registered.
   void unregisterFocusController(FocusController focusController) {
-    if (_focusController != null && _focusController == focusController) {
-      _focusController!.removeListener(_onFocusControllerChanged);
-      _focusController = null;
+    final listener = _focusControllers.remove(focusController);
+    if (listener != null) {
+      focusController.removeListener(listener);
     }
   }
 
   /// Registers a focus controller.
   ///
-  /// The [focusController] represents the focus controller of this control.
+  /// A control can have any number of focus controllers, e.g. when the same
+  /// control is bound to a slider and to a text field. The control has focus
+  /// while any of them has, and is marked as touched whenever one of them
+  /// loses focus. Registering the same controller twice has no effect.
+  ///
+  /// [focus] moves UI focus to the first registered controller, and
+  /// [unfocus] removes it from all of them.
   void registerFocusController(FocusController focusController) {
-    if (_focusController == focusController) {
+    if (_focusControllers.containsKey(focusController)) {
       return;
     }
 
-    if (_focusController != null) {
-      unregisterFocusController(_focusController!);
-    }
-
-    _focusController = focusController;
-    _focusController!.addListener(_onFocusControllerChanged);
+    void listener() => _onFocusControllerChanged(focusController);
+    _focusControllers[focusController] = listener;
+    focusController.addListener(listener);
   }
 
-  void _onFocusControllerChanged() {
+  void _onFocusControllerChanged(FocusController focusController) {
     _Batch.run(() {
       _updateFocusState(
-        _focusController!.hasFocus,
-        notifyFocusController: false,
+        _focusControllers.keys.any((controller) => controller.hasFocus),
+        notifyFocusControllers: false,
       );
 
-      if (_focusController!.hasFocus == false) {
+      if (focusController.hasFocus == false) {
         markAsTouched();
       }
     });
   }
 
-  void _updateFocusState(bool value, {bool notifyFocusController = true}) {
+  void _updateFocusState(bool value, {bool notifyFocusControllers = true}) {
     _hasFocus = value;
     _notify(_focusBit);
 
-    if (notifyFocusController) {
-      _focusController?.onControlFocusChanged(_hasFocus);
+    if (!notifyFocusControllers) {
+      return;
+    }
+
+    if (value) {
+      // Only one UI element can hold focus, so move it to the first.
+      _focusControllers.keys.firstOrNull?.onControlFocusChanged(true);
+    } else {
+      for (final controller in List.of(_focusControllers.keys)) {
+        if (controller.hasFocus) {
+          controller.onControlFocusChanged(false);
+        }
+      }
     }
   }
 
@@ -1324,9 +1306,8 @@ class FormControl<T> extends AbstractControl<T> {
   /// affects this control and its parent, otherwise only affects to this
   /// control.
   ///
-  /// When [emitEvent] is true or not supplied (the default), both the
-  /// *statusChanges* and *valueChanges* events notify listeners with the
-  /// latest status and value when the control is reset. When false, no events
+  /// When [emitEvent] is true or not supplied (the default), listeners
+  /// are notified with the latest status and value when the control is reset. When false, no events
   /// are emitted.
   ///
   /// ### Examples
@@ -1402,9 +1383,8 @@ class FormControl<T> extends AbstractControl<T> {
   /// affects this control and its parent, otherwise only affects to this
   /// control.
   ///
-  /// When [emitEvent] is true or not supplied (the default), both the
-  /// *statusChanges* and *valueChanges* emit events with the latest status
-  /// and value when the control is reset. When false, no events are emitted.
+  /// When [emitEvent] is true or not supplied (the default), listeners
+  /// are notified with the latest status and value when the control is reset. When false, no events are emitted.
   @override
   void updateValue(
     T? value, {
@@ -1434,9 +1414,8 @@ class FormControl<T> extends AbstractControl<T> {
   /// affects this control and its parent, otherwise only affects to this
   /// control.
   ///
-  /// When [emitEvent] is true or not supplied (the default), both the
-  /// *statusChanges* and *valueChanges* emit events with the latest status
-  /// and value when the control is reset. When false, no events are emitted.
+  /// When [emitEvent] is true or not supplied (the default), listeners
+  /// are notified with the latest status and value when the control is reset. When false, no events are emitted.
   @override
   void patchValue(T? value, {bool updateParent = true, bool emitEvent = true}) {
     _Batch.run(() {
@@ -1456,8 +1435,9 @@ class FormControl<T> extends AbstractControl<T> {
 }
 
 /// The base class form [FormGroup] and [FormArray].
-/// It provides methods to get a control by name and a [Stream] that emits
-/// events each time a control is added to or removed from the collection.
+/// It provides methods to get a control by name, and reports
+/// [ControlChanges.collection] to listeners each time a control is added to
+/// or removed from the collection.
 abstract class FormControlCollection<T> extends AbstractControl<T> {
   FormControlCollection({
     super.validators,
@@ -1465,18 +1445,6 @@ abstract class FormControlCollection<T> extends AbstractControl<T> {
     super.asyncValidatorsDebounceTime,
     super.disabled,
   });
-
-  final _collectionChanges =
-      StreamController<List<AbstractControl<Object?>>>.broadcast();
-  List<AbstractControl<Object?>> _pendingCollection = const [];
-
-  @override
-  void _emitStreams(int bits) {
-    super._emitStreams(bits);
-    if (bits & _collectionBit != 0 && !_collectionChanges.isClosed) {
-      _collectionChanges.add(_pendingCollection);
-    }
-  }
 
   /// Retrieves a child control given the control's [name] or path.
   ///
@@ -1486,6 +1454,45 @@ abstract class FormControlCollection<T> extends AbstractControl<T> {
   /// Throws [FormControlNotFoundException] if no control founded with
   /// the specified [name]/path.
   AbstractControl<dynamic> control(String name);
+
+  /// Retrieves the [FormControl] at [name] (a name or dot-delimited path),
+  /// typed, so no cast is needed.
+  ///
+  /// Throws [FormControlNotFoundException] if there is no control at [name],
+  /// and [FormControlTypeException] if it isn't a `FormControl<V>`.
+  ///
+  /// ### Example:
+  /// ```dart
+  /// final email = form.formControl<String>('email');
+  /// ```
+  FormControl<V> formControl<V>(String name) =>
+      _typedControl<FormControl<V>>(name);
+
+  /// Retrieves the [FormGroup] at [name] (a name or dot-delimited path).
+  ///
+  /// Throws [FormControlNotFoundException] if there is no control at [name],
+  /// and [FormControlTypeException] if it isn't a [FormGroup].
+  FormGroup formGroup(String name) => _typedControl<FormGroup>(name);
+
+  /// Retrieves the [FormArray] at [name] (a name or dot-delimited path),
+  /// typed, so no cast is needed.
+  ///
+  /// Throws [FormControlNotFoundException] if there is no control at [name],
+  /// and [FormControlTypeException] if it isn't a `FormArray<V>`.
+  FormArray<V> formArray<V>(String name) => _typedControl<FormArray<V>>(name);
+
+  C _typedControl<C extends AbstractControl<dynamic>>(String name) {
+    final found = control(name);
+    if (found is C) {
+      return found;
+    }
+
+    throw FormControlTypeException(
+      controlName: name,
+      expectedType: C,
+      control: found,
+    );
+  }
 
   /// Checks if collection contains a control by a given [name].
   ///
@@ -1497,21 +1504,11 @@ abstract class FormControlCollection<T> extends AbstractControl<T> {
   /// Retrieves all values regardless of disabled status of children controls.
   T get rawValue;
 
-  /// Emits when a control is added or removed from collection.
-  Stream<List<AbstractControl<Object?>>> get collectionChanges =>
-      _collectionChanges.stream;
-
-  /// Close stream that emit collection change events
-  void closeCollectionEvents() {
-    _collectionChanges.close();
-  }
-
   /// Notify to listeners that the collection changed.
   ///
   /// This is for internal use only.
   @protected
-  void emitsCollectionChanged(List<AbstractControl<Object?>> controls) {
-    _pendingCollection = List.unmodifiable(controls);
+  void emitsCollectionChanged() {
     _notify(_collectionBit);
   }
 
@@ -1543,10 +1540,9 @@ abstract class FormControlCollection<T> extends AbstractControl<T> {
   /// When [updateParent] is false, mark only this control.
   /// When true or not supplied (the default), marks all direct ancestors.
   ///
-  /// When [emitEvent] is true or not supplied (the default), [valueChanges]
-  /// and [statusChanged] events are emitted if value or status change.
-  /// Otherwise the control update this values but none of this events are
-  /// emitted.
+  /// When [emitEvent] is true or not supplied (the default), listeners
+  /// are notified if value or status change. Otherwise the control updates
+  /// these values without notifying.
   @override
   void markAsEnabled({bool updateParent = true, bool emitEvent = true}) {
     _Batch.run(() {
@@ -1568,10 +1564,9 @@ abstract class FormControlCollection<T> extends AbstractControl<T> {
   /// When [updateParent] is false, mark only this control.
   /// When true or not supplied (the default), marks all direct ancestors.
   ///
-  /// When [emitEvent] is true or not supplied (the default), [valueChanges]
-  /// and [statusChanged] events are emitted if value or status change.
-  /// Otherwise the control update this values but none of this events are
-  /// emitted.
+  /// When [emitEvent] is true or not supplied (the default), listeners
+  /// are notified if value or status change. Otherwise the control updates
+  /// these values without notifying.
   @override
   void markAsDisabled({bool updateParent = true, bool emitEvent = true}) {
     _Batch.run(() {
@@ -1783,7 +1778,7 @@ class FormGroup extends FormControlCollection<Map<String, Object?>> {
       updateValueAndValidity();
       updateTouched();
       updatePristine();
-      emitsCollectionChanged(_controls.values.toList());
+      emitsCollectionChanged();
     });
   }
 
@@ -1794,7 +1789,6 @@ class FormGroup extends FormControlCollection<Map<String, Object?>> {
       control.parent = null;
       control.dispose();
     });
-    closeCollectionEvents();
     super.dispose();
   }
 
@@ -1843,9 +1837,8 @@ class FormGroup extends FormControlCollection<Map<String, Object?>> {
   /// affects this control and its parent, otherwise only affects to this
   /// control.
   ///
-  /// When [emitEvent] is true or not supplied (the default), both the
-  /// *statusChanges* and *valueChanges* emit events with the latest status
-  /// and value when the control is reset. When false, no events are emitted.
+  /// When [emitEvent] is true or not supplied (the default), listeners
+  /// are notified with the latest status and value when the control is reset. When false, no events are emitted.
   ///
   /// ### Example:
   /// ```dart
@@ -1893,9 +1886,8 @@ class FormGroup extends FormControlCollection<Map<String, Object?>> {
   /// affects this control and its parent, otherwise only affects to this
   /// control.
   ///
-  /// When [emitEvent] is true or not supplied (the default), both the
-  /// *statusChanges* and *valueChanges* emit events with the latest status
-  /// and value when the control is reset. When false, no events are emitted.
+  /// When [emitEvent] is true or not supplied (the default), listeners
+  /// are notified with the latest status and value when the control is reset. When false, no events are emitted.
   ///
   /// ## Example
   /// ```dart
@@ -2026,9 +2018,8 @@ class FormGroup extends FormControlCollection<Map<String, Object?>> {
   /// affects this control and its parent, otherwise only affects to this
   /// control.
   ///
-  /// When [emitEvent] is true or not supplied (the default), both the
-  /// *statusChanges* and *valueChanges* emit events with the latest status
-  /// and value when the control is reset. When false, no events are emitted.
+  /// When [emitEvent] is true or not supplied (the default), listeners
+  /// are notified with the latest status and value when the control is reset. When false, no events are emitted.
   void removeControl(
     String name, {
     bool updateParent = true,
@@ -2042,7 +2033,7 @@ class FormGroup extends FormControlCollection<Map<String, Object?>> {
       _controls.removeWhere((key, value) => key == name);
       updateValueAndValidity(updateParent: updateParent, emitEvent: emitEvent);
 
-      emitsCollectionChanged(_controls.values.toList());
+      emitsCollectionChanged();
     });
   }
 
@@ -2174,9 +2165,8 @@ class FormArray<T> extends FormControlCollection<List<T?>> {
   /// affects this control and its parent, otherwise only affects to this
   /// control.
   ///
-  /// When [emitEvent] is true or not supplied (the default), both the
-  /// *statusChanges* and *valueChanges* emit events with the latest status
-  /// and value when the control is reset. When false, no events are emitted.
+  /// When [emitEvent] is true or not supplied (the default), listeners
+  /// are notified with the latest status and value when the control is reset. When false, no events are emitted.
   @override
   void markAsDisabled({bool updateParent = true, bool emitEvent = true}) {
     _Batch.run(() {
@@ -2211,9 +2201,8 @@ class FormArray<T> extends FormControlCollection<List<T?>> {
   /// affects this control and its parent, otherwise only affects to this
   /// control.
   ///
-  /// When [emitEvent] is true or not supplied (the default), both the
-  /// *statusChanges* and *valueChanges* emit events with the latest status
-  /// and value when the control is reset. When false, no events are emitted.
+  /// When [emitEvent] is true or not supplied (the default), listeners
+  /// are notified with the latest status and value when the control is reset. When false, no events are emitted.
   void insert(
     int index,
     AbstractControl<T> control, {
@@ -2227,7 +2216,7 @@ class FormArray<T> extends FormControlCollection<List<T?>> {
       updateValueAndValidity(emitEvent: emitEvent, updateParent: updateParent);
 
       if (emitEvent) {
-        emitsCollectionChanged(_controls);
+        emitsCollectionChanged();
       }
     });
   }
@@ -2238,9 +2227,8 @@ class FormArray<T> extends FormControlCollection<List<T?>> {
   /// affects this control and its parent, otherwise only affects to this
   /// control.
   ///
-  /// When [emitEvent] is true or not supplied (the default), both the
-  /// *statusChanges* and *valueChanges* emit events with the latest status
-  /// and value when the control is reset. When false, no events are emitted.
+  /// When [emitEvent] is true or not supplied (the default), listeners
+  /// are notified with the latest status and value when the control is reset. When false, no events are emitted.
   void add(
     AbstractControl<T> control, {
     bool updateParent = true,
@@ -2255,9 +2243,8 @@ class FormArray<T> extends FormControlCollection<List<T?>> {
   /// affects this control and its parent, otherwise only affects to this
   /// control.
   ///
-  /// When [emitEvent] is true or not supplied (the default), both the
-  /// *statusChanges* and *valueChanges* emit events with the latest status
-  /// and value when the control is reset. When false, no events are emitted.
+  /// When [emitEvent] is true or not supplied (the default), listeners
+  /// are notified with the latest status and value when the control is reset. When false, no events are emitted.
   void addAll(
     List<AbstractControl<T>> controls, {
     bool updateParent = true,
@@ -2270,7 +2257,7 @@ class FormArray<T> extends FormControlCollection<List<T?>> {
       }
 
       updateValueAndValidity(updateParent: updateParent, emitEvent: emitEvent);
-      emitsCollectionChanged(_controls);
+      emitsCollectionChanged();
     });
   }
 
@@ -2282,9 +2269,8 @@ class FormArray<T> extends FormControlCollection<List<T?>> {
   /// affects this control and its parent, otherwise only affects to this
   /// control.
   ///
-  /// When [emitEvent] is true or not supplied (the default), both the
-  /// *statusChanges* and *valueChanges* emit events with the latest status
-  /// and value when the control is reset. When false, no events are emitted.
+  /// When [emitEvent] is true or not supplied (the default), listeners
+  /// are notified with the latest status and value when the control is reset. When false, no events are emitted.
   AbstractControl<T> removeAt(
     int index, {
     bool emitEvent = true,
@@ -2296,7 +2282,7 @@ class FormArray<T> extends FormControlCollection<List<T?>> {
       updateValueAndValidity(emitEvent: emitEvent, updateParent: updateParent);
 
       if (emitEvent) {
-        emitsCollectionChanged(_controls);
+        emitsCollectionChanged();
       }
 
       return removedControl;
@@ -2311,9 +2297,8 @@ class FormArray<T> extends FormControlCollection<List<T?>> {
   /// affects this control and its parent, otherwise only affects to this
   /// control.
   ///
-  /// When [emitEvent] is true or not supplied (the default), both the
-  /// *statusChanges* and *valueChanges* emit events with the latest status
-  /// and value when the control is reset. When false, no events are emitted.
+  /// When [emitEvent] is true or not supplied (the default), listeners
+  /// are notified with the latest status and value when the control is reset. When false, no events are emitted.
   ///
   /// Throws [FormControlNotFoundException] if [control] is not a child control
   /// of the array.
@@ -2352,15 +2337,14 @@ class FormArray<T> extends FormControlCollection<List<T?>> {
   /// Removes all children controls from the array.
   ///
   /// The [value] and validity state of the array is updated and the event
-  /// [collectionChanges] is triggered.
+  /// listeners are notified with [ControlChanges.collection].
   ///
   /// When [updateParent] is true or not supplied (the default) each change
   /// affects this control and its parent, otherwise only affects to this
   /// control.
   ///
-  /// When [emitEvent] is true or not supplied (the default), both the
-  /// *statusChanges* and *valueChanges* emit events with the latest status
-  /// and value when the control is reset. When false, no events are emitted.
+  /// When [emitEvent] is true or not supplied (the default), listeners
+  /// are notified with the latest status and value when the control is reset. When false, no events are emitted.
   void clear({bool emitEvent = true, bool updateParent = true}) {
     _Batch.run(() {
       forEachChild((control) => control.parent = null);
@@ -2368,7 +2352,7 @@ class FormArray<T> extends FormControlCollection<List<T?>> {
       updateValueAndValidity(emitEvent: emitEvent, updateParent: updateParent);
 
       if (emitEvent) {
-        emitsCollectionChanged(_controls);
+        emitsCollectionChanged();
       }
     });
   }
@@ -2455,7 +2439,6 @@ class FormArray<T> extends FormControlCollection<List<T?>> {
       control.parent = null;
       control.dispose();
     });
-    closeCollectionEvents();
     super.dispose();
   }
 
@@ -2506,9 +2489,8 @@ class FormArray<T> extends FormControlCollection<List<T?>> {
   /// affects this control and its parent, otherwise only affects to this
   /// control.
   ///
-  /// When [emitEvent] is true or not supplied (the default), both the
-  /// *statusChanges* and *valueChanges* emit events with the latest status
-  /// and value when the control is reset. When false, no events are emitted.
+  /// When [emitEvent] is true or not supplied (the default), listeners
+  /// are notified with the latest status and value when the control is reset. When false, no events are emitted.
   ///
   /// ### Example:
   /// ```dart
@@ -2571,9 +2553,8 @@ class FormArray<T> extends FormControlCollection<List<T?>> {
   /// affects this control and its parent, otherwise only affects to this
   /// control.
   ///
-  /// When [emitEvent] is true or not supplied (the default), both the
-  /// *statusChanges* and *valueChanges* emit events with the latest status
-  /// and value when the control is reset. When false, no events are emitted.
+  /// When [emitEvent] is true or not supplied (the default), listeners
+  /// are notified with the latest status and value when the control is reset. When false, no events are emitted.
   ///
   /// ## Example
   /// Patch with a sub-set array

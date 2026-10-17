@@ -1,6 +1,7 @@
 import 'package:bind_forms/bind_forms.dart';
 import 'package:material_ui/material_ui.dart';
 
+import 'builders_page.dart';
 import 'login_page.dart';
 import 'signals_page.dart';
 import 'showcase/demo.dart';
@@ -44,6 +45,12 @@ class CatalogPage extends StatelessWidget {
       'A complete form: validation, errors on blur, submit',
       Icons.login,
       LoginPage.new,
+    ),
+    (
+      'Builders',
+      'A sign-up form without adapter fields or dispose; two widgets on one control',
+      Icons.construction,
+      BuildersPage.new,
     ),
     (
       'Signals',

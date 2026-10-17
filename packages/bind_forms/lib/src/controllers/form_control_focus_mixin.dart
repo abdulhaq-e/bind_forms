@@ -9,9 +9,9 @@ import 'package:flutter/widgets.dart';
 ///
 /// The focus controller is created and registered with [control] the first
 /// time [focusNode] is read, so an adapter whose [focusNode] is never used
-/// doesn't track focus at all. A control has a single focus controller, so
-/// reading [focusNode] replaces any focus controller registered with
-/// [control] before.
+/// doesn't track focus at all. Several adapters can be bound to the same
+/// control (e.g. a slider and a text field), each with its own [focusNode]:
+/// blurring any of them marks the control as touched.
 mixin FormControlFocusMixin<T> {
   /// The control this adapter is bound to.
   FormControl<T> get control;

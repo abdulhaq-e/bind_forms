@@ -1,6 +1,7 @@
 import 'package:material_ui/material_ui.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:bind_forms/bind_forms.dart';
+import 'package:bind_forms/material_ui.dart';
 
 void main() {
   group('TimeOfDayValueAccessor Tests', () {
