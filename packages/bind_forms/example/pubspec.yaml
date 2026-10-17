@@ -36,7 +36,7 @@ dependencies:
   flutter_rating_bar: ^4.0.1
   flutter_typeahead:
     git:
-      url: https://github.com/abdulhaq-e/flutter_typeahead.git
+      url: https://github.com/AbdulRahmanAlHamali/flutter_typeahead.git
       ref: master
   fluttercontactpicker: ^5.0.0
   getwidget: ^7.0.2
