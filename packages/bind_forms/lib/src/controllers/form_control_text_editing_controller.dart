@@ -4,6 +4,7 @@
 
 import 'package:bind_forms/bind_forms.dart';
 import 'package:flutter/widgets.dart';
+import 'package:material_ui/material_ui.dart' show TimeOfDay;
 
 /// A [TextEditingController] that stays in sync with a [FormControl].
 ///
@@ -70,8 +71,8 @@ class FormControlTextEditingController<T> extends TextEditingController
   ///
   /// [valueAccessor] converts between the control's value and the text. If
   /// omitted, one is picked from the control's type: [IntValueAccessor],
-  /// [DoubleValueAccessor], [DateTimeValueAccessor], or
-  /// [DefaultValueAccessor] for anything else.
+  /// [DoubleValueAccessor], [DateTimeValueAccessor], [TimeOfDayValueAccessor],
+  /// or [DefaultValueAccessor] for anything else.
   FormControlTextEditingController(
     this.control, {
     ControlValueAccessor<T, String>? valueAccessor,
@@ -135,6 +136,8 @@ class FormControlTextEditingController<T> extends TextEditingController
       return DoubleValueAccessor() as ControlValueAccessor<K, String>;
     } else if (control is FormControl<DateTime>) {
       return DateTimeValueAccessor() as ControlValueAccessor<K, String>;
+    } else if (control is FormControl<TimeOfDay>) {
+      return TimeOfDayValueAccessor() as ControlValueAccessor<K, String>;
     }
 
     return DefaultValueAccessor<K, String>();

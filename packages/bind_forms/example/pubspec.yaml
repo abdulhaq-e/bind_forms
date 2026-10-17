@@ -1,0 +1,22 @@
+name: bind_forms_example
+description: Login form built with real Material widgets bound by bind_forms.
+publish_to: none
+version: 1.0.0+1
+resolution: workspace
+
+environment:
+  sdk: ^3.13.3
+
+dependencies:
+  flutter:
+    sdk: flutter
+  bind_forms: ^0.0.1
+  material_ui: ^1.7.0
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^6.0.0
+
+flutter:
+  uses-material-design: true
