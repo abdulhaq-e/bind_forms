@@ -42,7 +42,7 @@ jobs:
     steps:
       - uses: actions/checkout@v7
 
-      # Lists which package versions are ready to release (run Publish), and
-      # flags any published-but-untagged or tagged-but-unpublished version.
+      # Lists which package versions aren't on pub.dev yet, with the tag
+      # command for each one that can be released now.
       - name: Summarize
         run: python3 tool/release.py status >> "$GITHUB_STEP_SUMMARY"
