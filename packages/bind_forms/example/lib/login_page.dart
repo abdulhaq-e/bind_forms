@@ -1,0 +1,141 @@
+import 'package:bind_forms/bind_forms.dart';
+import 'package:material_ui/material_ui.dart';
+
+class LoginPage extends StatefulWidget {
+  const LoginPage({super.key});
+
+  @override
+  State<LoginPage> createState() => _LoginPageState();
+}
+
+class _LoginPageState extends State<LoginPage> {
+  final FormGroup form = FormGroup({
+    'email': FormControl<String>(
+      validators: [Validators.required, Validators.email],
+    ),
+    'password': FormControl<String>(
+      validators: [Validators.required, Validators.minLength(8)],
+    ),
+    'acceptTerms': FormControl<bool>(
+      value: false,
+      validators: [Validators.requiredTrue],
+    ),
+  });
+
+  // Each field is a real widget. These adapters are the only thing binding
+  // it to its control, so every widget parameter (keyboardType,
+  // obscureText, title, ...) is just that widget's own parameter.
+  late final _email = FormControlTextEditingController<String>(
+    form.control('email') as FormControl<String>,
+    validationMessages: {
+      ValidationMessage.email: (_) => 'The email value must be a valid email',
+    },
+  );
+  late final _password = FormControlTextEditingController<String>(
+    form.control('password') as FormControl<String>,
+    validationMessages: {
+      ValidationMessage.minLength: (error) =>
+          'The password must be at least '
+          '${(error as Map)['requiredLength']} characters long',
+    },
+  );
+  late final _acceptTerms = FormControlValueNotifier<bool>(
+    form.control('acceptTerms') as FormControl<bool>,
+    // A checkbox is rarely focused and blurred, so show its error as soon
+    // as the user has toggled it or tried to submit.
+    showErrors: (control) =>
+        control.invalid && (control.dirty || control.touched),
+  );
+
+  @override
+  void dispose() {
+    _email.dispose();
+    _password.dispose();
+    _acceptTerms.dispose();
+    form.dispose();
+    super.dispose();
+  }
+
+  void _login() {
+    final messenger = ScaffoldMessenger.of(context);
+    if (form.valid) {
+      messenger.showSnackBar(
+        SnackBar(content: Text('Logged in as ${_email.control.value}')),
+      );
+    } else {
+      // Marking everything touched makes all pending errors visible.
+      form.markAllAsTouched();
+      messenger.showSnackBar(
+        const SnackBar(content: Text('Please correct the errors.')),
+      );
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      appBar: AppBar(title: const Text('Login')),
+      body: Padding(
+        padding: const EdgeInsets.all(16.0),
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: <Widget>[
+            ListenableBuilder(
+              listenable: _email,
+              builder: (context, _) => TextField(
+                controller: _email,
+                focusNode: _email.focusNode,
+                decoration: InputDecoration(
+                  labelText: 'Email',
+                  border: const OutlineInputBorder(),
+                  errorText: _email.errorText(context),
+                ),
+                keyboardType: TextInputType.emailAddress,
+                textInputAction: TextInputAction.next,
+              ),
+            ),
+            const SizedBox(height: 16.0),
+            ListenableBuilder(
+              listenable: _password,
+              builder: (context, _) => TextField(
+                controller: _password,
+                focusNode: _password.focusNode,
+                decoration: InputDecoration(
+                  labelText: 'Password',
+                  border: const OutlineInputBorder(),
+                  errorText: _password.errorText(context),
+                ),
+                obscureText: true,
+                onSubmitted: (_) => _login(),
+              ),
+            ),
+            const SizedBox(height: 8.0),
+            ListenableBuilder(
+              listenable: _acceptTerms,
+              builder: (context, _) => CheckboxListTile(
+                value: _acceptTerms.value ?? false,
+                onChanged: _acceptTerms.enabled ? _acceptTerms.onChanged : null,
+                isError: _acceptTerms.errorText(context) != null,
+                title: const Text('I accept the terms and conditions'),
+                controlAffinity: ListTileControlAffinity.leading,
+                contentPadding: EdgeInsets.zero,
+              ),
+            ),
+            const SizedBox(height: 24.0),
+            ElevatedButton(onPressed: _login, child: const Text('Login')),
+            const SizedBox(height: 20),
+            // Any control is a Listenable, with nothing to create or
+            // dispose. A change to any field notifies the form once.
+            ListenableBuilder(
+              listenable: form.listenable,
+              builder: (context, _) => ElevatedButton(
+                onPressed: form.valid ? _login : null,
+                child: const Text('Login (enabled when valid)'),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}

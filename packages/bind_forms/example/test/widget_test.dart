@@ -1,12 +1,21 @@
-import 'package:bind_forms_example/main.dart';
+import 'package:bind_forms_example/login_page.dart';
+import 'package:bind_forms/bind_forms.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:material_ui/material_ui.dart';
+
+/// The login page under the same app-wide config as the real app.
+Widget _app() => BindFormsConfig(
+  validationMessages: {
+    ValidationMessage.required: (_) => 'This field must not be empty',
+  },
+  child: const MaterialApp(home: LoginPage()),
+);
 
 void main() {
   Finder field(String label) => find.widgetWithText(TextField, label);
 
   testWidgets('submitting an empty form shows every error', (tester) async {
-    await tester.pumpWidget(const MyApp());
+    await tester.pumpWidget(_app());
 
     await tester.tap(find.widgetWithText(ElevatedButton, 'Login'));
     await tester.pump();
@@ -20,7 +29,7 @@ void main() {
   });
 
   testWidgets('errors appear on blur, not while typing', (tester) async {
-    await tester.pumpWidget(const MyApp());
+    await tester.pumpWidget(_app());
 
     await tester.enterText(field('Email'), 'not-an-email');
     await tester.pump();
@@ -33,7 +42,7 @@ void main() {
   });
 
   testWidgets('a valid form enables the second login button', (tester) async {
-    await tester.pumpWidget(const MyApp());
+    await tester.pumpWidget(_app());
     ElevatedButton enabledWhenValid() => tester.widget<ElevatedButton>(
       find.widgetWithText(ElevatedButton, 'Login (enabled when valid)'),
     );
