@@ -1,0 +1,12 @@
+name: bind_forms_workspace
+publish_to: none
+
+environment:
+  sdk: ^3.13.3
+
+workspace:
+  - packages/bind_forms_core
+  - packages/bind_forms
+
+dev_dependencies:
+  lints: ^6.0.0
